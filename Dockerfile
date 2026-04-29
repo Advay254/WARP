@@ -8,15 +8,16 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 # ── Evolution API ─────────────────────────────────────────────────────────────
-WORKDIR /evolution
-RUN npm install -g @evolution-api/evolution-api@2.2.3 2>/dev/null || \
-    npm install -g evolution-api 2>/dev/null || true
+# Tag is 2.2.3 (not v2.2.3) — no fallback to avoid cloning wrong branch
+RUN git clone --depth 1 --branch 2.2.3 https://github.com/EvolutionAPI/evolution-api.git /evolution-src
 
-# Install Evolution API directly from source as fallback
-RUN git clone --depth 1 --branch v2.2.3 https://github.com/EvolutionAPI/evolution-api.git /evolution-src 2>/dev/null || \
-    git clone --depth 1 https://github.com/EvolutionAPI/evolution-api.git /evolution-src
 WORKDIR /evolution-src
-RUN npm install && npx prisma generate && npm run build && npm prune --production
+
+# Schema is postgresql-schema.prisma, not the default schema.prisma
+RUN npm install && \
+    npx prisma generate --schema ./prisma/postgresql-schema.prisma && \
+    npm run build && \
+    npm prune --production
 
 # ── Python proxy ──────────────────────────────────────────────────────────────
 RUN python3 -m venv /venv
