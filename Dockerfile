@@ -16,7 +16,7 @@ RUN npm install -g @evolution-api/evolution-api@2.2.3 2>/dev/null || \
 RUN git clone --depth 1 --branch v2.2.3 https://github.com/EvolutionAPI/evolution-api.git /evolution-src 2>/dev/null || \
     git clone --depth 1 https://github.com/EvolutionAPI/evolution-api.git /evolution-src
 WORKDIR /evolution-src
-RUN npm install --production && npm run build 2>/dev/null || true
+RUN npm install && npm run build && npm prune --production
 
 # ── Python proxy ──────────────────────────────────────────────────────────────
 RUN python3 -m venv /venv
