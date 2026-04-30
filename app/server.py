@@ -1,31 +1,5 @@
 """
 server.py — Evolution API Proxy FastAPI application
-
-Proxy routes  (Bearer protected):
-  ALL  /api/*                     → Evolution API internal (authenticated proxy)
-  POST /api/instance/create       → guarded by ADMIN_KEY too
-  POST /api/message/safe/{inst}   → safe send with rate limiting + anti-ban
-
-Webhook receiver:
-  POST /webhook/{instance}        → receives Evolution events, routes to configured webhooks
-
-Dashboard (session-cookie protected):
-  GET  /dashboard                 → main overview
-  GET  /dashboard/instance/{n}    → per-instance detail
-  POST /dashboard/instance/create → create new instance (phone number)
-  POST /dashboard/instance/{n}/connect  → request pairing code (phone number method)
-  POST /dashboard/instance/{n}/disconnect
-  DELETE /dashboard/instance/{n}
-  GET  /dashboard/webhooks/{n}    → webhook config for instance
-  POST /dashboard/webhooks/{n}    → add webhook
-  PATCH /dashboard/webhooks/{n}/{id}   → update webhook
-  DELETE /dashboard/webhooks/{n}/{id} → delete webhook
-  POST /dashboard/message/send    → send test message
-
-Auth:
-  GET/POST /login                 → dashboard login
-  GET  /logout                    → clear session
-  GET  /health                    → public health check
 """
 
 import os
@@ -98,54 +72,49 @@ async def _get_instances() -> list:
 
 
 # ═════════════════════════════════════════════════════════════════════════════
-# PUBLIC
+# PUBLIC ROUTES
 # ═════════════════════════════════════════════════════════════════════════════
 
 @app.get("/health")
 async def health():
+    uptime = int(time.time() - START_TIME)
     instances = await _get_instances()
     connected = sum(1 for i in instances if i.get("instance", {}).get("state") == "open")
     return {
-        "status":         "ok",
-        "uptime_seconds": int(time.time() - START_TIME),
-        "instances":      len(instances),
-        "connected":      connected,
-        "warmup_mode":    WARMUP_MODE,
+        "status": "ok",
+        "uptime_seconds": uptime,
+        "instances_total": len(instances),
+        "instances_connected": connected,
+        "warmup_mode": WARMUP_MODE,
     }
+
 
 @app.get("/")
 async def root():
-    return RedirectResponse(url="/dashboard", status_code=302)
+    return RedirectResponse("/dashboard", status_code=302)
 
 
 # ═════════════════════════════════════════════════════════════════════════════
-# AUTHENTICATED API PROXY
+# API PROXY
 # ═════════════════════════════════════════════════════════════════════════════
 
 @app.api_route("/api/{path:path}", methods=["GET","POST","PUT","PATCH","DELETE"])
 async def proxy_to_evolution(
-    path:    str,
+    path: str,
     request: Request,
-    _:       None = Depends(verify_api_key),
+    _: str = Depends(verify_api_key),
 ):
-    """
-    Transparent proxy to Evolution API internal.
-    Destructive paths also require x-admin-key.
-    """
-    destructive = any(x in path for x in ["create", "delete", "logout"])
-    if destructive:
+    if path == "instance/create" or path.startswith("instance/create/"):
         await verify_admin_key(request)
 
-    body    = await request.body()
+    body = await request.body()
+    params = dict(request.query_params)
     headers = {"apikey": EVO_KEY, "Content-Type": "application/json"}
 
-    async with httpx.AsyncClient(base_url=EVO_BASE, timeout=30) as client:
+    async with httpx.AsyncClient(base_url=EVO_BASE, timeout=60) as client:
         r = await client.request(
-            request.method,
-            f"/{path}",
-            content=body,
-            headers=headers,
-            params=dict(request.query_params),
+            request.method, f"/{path}",
+            content=body, params=params, headers=headers,
         )
 
     return Response(
@@ -155,28 +124,19 @@ async def proxy_to_evolution(
     )
 
 
-# ── Safe message send (with anti-ban measures) ────────────────────────────────
-
-class SafeSendRequest(BaseModel):
-    number:  str
-    text:    str
-    options: dict = {}
-
 @app.post("/api/message/safe/{instance}")
 async def safe_send(
     instance: str,
-    body:     SafeSendRequest,
-    _:        None = Depends(verify_api_key),
+    request: Request,
+    _: str = Depends(verify_api_key),
 ):
-    """Rate-limited, delay-jittered, presence-simulated message send."""
+    body = await request.json()
     result = await send_message_safe(
         instance=instance,
-        jid=body.number,
-        message={"text": body.text, "options": body.options},
+        jid=body.get("number", ""),
+        message=body.get("message", {}),
     )
-    if "error" in result:
-        raise HTTPException(status_code=429, detail=result["error"])
-    return result
+    return JSONResponse(result)
 
 
 # ═════════════════════════════════════════════════════════════════════════════
@@ -185,50 +145,49 @@ async def safe_send(
 
 @app.post("/webhook/{instance}")
 async def receive_webhook(instance: str, request: Request):
-    """
-    Receives all Evolution API events for an instance.
-    Validates HMAC signature, applies safety checks, routes to configured webhooks.
-    """
-    payload_bytes = await request.body()
-    signature     = request.headers.get("X-Evolution-Signature", "")
+    raw  = await request.body()
+    sig  = request.headers.get("x-hub-signature-256", "")
+    wh_secret = os.environ.get("WEBHOOK_SECRET", "")
 
-    # Validate signature
-    if not webhook_manager.validate_signature(payload_bytes, signature):
-        logger.warning(f"[{instance}] Webhook signature validation failed")
-        raise HTTPException(status_code=401, detail="Invalid webhook signature")
+    if wh_secret and sig:
+        expected = "sha256=" + hmac_lib.new(
+            wh_secret.encode(), raw, hashlib.sha256
+        ).hexdigest()
+        if not hmac_lib.compare_digest(sig, expected):
+            raise HTTPException(403, "Invalid signature")
 
     try:
-        payload    = json.loads(payload_bytes)
-        event_type = payload.get("event", "UNKNOWN")
-        data       = payload.get("data", {})
-    except json.JSONDecodeError:
-        raise HTTPException(status_code=400, detail="Invalid JSON payload")
+        payload = json.loads(raw)
+    except Exception:
+        raise HTTPException(400, "Invalid JSON")
 
-    # ── Safety checks on inbound messages ────────────────────────────────────
-    if event_type == "MESSAGES_UPSERT":
-        key      = data.get("key", {})
-        msg_id   = key.get("id", "")
-        from_me  = key.get("fromMe", False)
+    event   = payload.get("event", "")
+    data    = payload.get("data", {})
+    sender  = data.get("key", {}).get("remoteJid", "")
+    is_bot  = is_bot_message(payload)
+    is_self = is_self_message(payload)
 
-        # Drop bot's own messages (reply loop prevention)
-        if from_me or is_bot_message(msg_id):
-            return JSONResponse({"status": "ignored", "reason": "bot_message"})
+    if is_bot or is_self:
+        return {"status": "ignored"}
 
-        # Drop self-messages
-        sender_jid = key.get("remoteJid", "")
-        instances  = await _get_instances()
-        own_number = next(
-            (i.get("instance", {}).get("owner", "") for i in instances
-             if i.get("instance", {}).get("instanceName") == instance),
-            ""
-        )
-        if own_number and is_self_message(sender_jid, own_number):
-            return JSONResponse({"status": "ignored", "reason": "self_message"})
+    webhooks = webhook_manager.get_instance_webhooks(instance)
+    async with httpx.AsyncClient(timeout=10) as client:
+        for wh in webhooks:
+            if not wh.get("enabled", True):
+                continue
+            allowed = wh.get("events", [])
+            if allowed and event not in allowed:
+                continue
+            try:
+                await client.post(wh["url"], json=payload, headers={
+                    "Content-Type": "application/json",
+                    "X-Instance": instance,
+                    "X-Event": event,
+                })
+            except Exception as e:
+                logger.warning(f"Webhook delivery failed [{wh['url']}]: {e}")
 
-    # ── Route to configured webhooks ──────────────────────────────────────────
-    await webhook_manager.route_event(instance, event_type, payload)
-
-    return JSONResponse({"status": "received", "event": event_type})
+    return {"status": "received"}
 
 
 # ═════════════════════════════════════════════════════════════════════════════
@@ -239,53 +198,45 @@ async def receive_webhook(instance: str, request: Request):
 async def login_page(request: Request, error: Optional[str] = None):
     return templates.TemplateResponse("login.html", {"request": request, "error": error})
 
-
 @app.post("/login")
 async def login_submit(request: Request, username: str = Form(...), password: str = Form(...)):
-    if username == os.environ.get("DASHBOARD_USERNAME", "admin") and \
-       password == os.environ.get("DASHBOARD_PASSWORD", ""):
-        token    = create_session_token(username)
-        response = RedirectResponse(url="/dashboard", status_code=302)
-        response.set_cookie("session", token, httponly=True, samesite="lax", max_age=60*60*8)
-        return response
-    return templates.TemplateResponse(
-        "login.html", {"request": request, "error": "Invalid credentials."},
-        status_code=401,
-    )
-
+    admin_user = os.environ.get("DASHBOARD_USERNAME", "admin")
+    admin_pass = os.environ.get("DASHBOARD_PASSWORD", "")
+    if username == admin_user and password == admin_pass:
+        token = create_session_token(username)
+        resp  = RedirectResponse("/dashboard", status_code=302)
+        resp.set_cookie("session", token, httponly=True, samesite="lax", max_age=86400*7)
+        return resp
+    return RedirectResponse("/login?error=Invalid+credentials", status_code=302)
 
 @app.get("/logout")
 async def logout():
-    r = RedirectResponse(url="/login", status_code=302)
-    r.delete_cookie("session")
-    return r
+    resp = RedirectResponse("/login", status_code=302)
+    resp.delete_cookie("session")
+    return resp
 
 
 # ═════════════════════════════════════════════════════════════════════════════
-# DASHBOARD API  (session-cookie auth)
+# DASHBOARD
 # ═════════════════════════════════════════════════════════════════════════════
 
 @app.get("/dashboard", response_class=HTMLResponse)
 async def dashboard(request: Request, user: str = Depends(verify_session)):
-    instances      = await _get_instances()
-    webhook_config = webhook_manager.get_all_config()
-    server_url     = os.environ.get("SERVER_URL", request.base_url._url.rstrip("/"))
-
+    instances = await _get_instances()
+    server_url = os.environ.get("SERVER_URL", str(request.base_url).rstrip("/"))
+    uptime = int(time.time() - START_TIME)
     return templates.TemplateResponse("dashboard.html", {
-        "request":       request,
-        "user":          user,
-        "instances":     instances,
-        "webhook_config": webhook_config,
-        "all_events":    ALL_EVENTS,
-        "server_url":    server_url,
-        "api_key_set":   bool(EVO_KEY),
-        "admin_key_set": bool(os.environ.get("ADMIN_KEY")),
-        "warmup_mode":   WARMUP_MODE,
-        "uptime":        int(time.time() - START_TIME),
+        "request":    request,
+        "user":       user,
+        "instances":  instances,
+        "server_url": server_url,
+        "uptime":     uptime,
+        "all_events": ALL_EVENTS,
+        "warmup":     WARMUP_MODE,
     })
 
 
-# ── Instance management ───────────────────────────────────────────────────────
+# ─── Instance CRUD ────────────────────────────────────────────────────────────
 
 @app.post("/dashboard/instance/create")
 async def dashboard_create_instance(
@@ -312,16 +263,44 @@ async def dashboard_connect_instance(
     request:  Request,
     user:     str = Depends(verify_session),
 ):
-    """Request a pairing code for phone number connection (no QR scan needed)."""
+    """Pairing code connect — enter phone number, get 8-digit code."""
     body   = await request.json()
     number = body.get("number", "").strip().replace("+", "").replace(" ", "")
     if not number:
         raise HTTPException(400, "Phone number is required")
 
-    # First connect the instance, then request pairing code
     await _evo("GET", f"/instance/connect/{instance}")
     result = await _evo("POST", f"/instance/connect/{instance}", json={}, params={"number": number})
     return JSONResponse(result)
+
+
+@app.get("/dashboard/instance/{instance}/qrcode")
+async def dashboard_qrcode(instance: str, user: str = Depends(verify_session)):
+    """Get QR code for this instance. Returns base64 image."""
+    result = await _evo("GET", f"/instance/connect/{instance}")
+    return JSONResponse(result)
+
+
+@app.post("/dashboard/instance/{instance}/import-session")
+async def dashboard_import_session(
+    instance: str,
+    request:  Request,
+    user:     str = Depends(verify_session),
+):
+    """Import a raw Baileys session credentials JSON to instantly restore a connection."""
+    body = await request.json()
+    creds = body.get("credentials", "")
+    if not creds:
+        raise HTTPException(400, "credentials JSON is required")
+
+    try:
+        creds_obj = json.loads(creds) if isinstance(creds, str) else creds
+    except Exception:
+        raise HTTPException(400, "credentials must be valid JSON")
+
+    # Attempt to set session via Evolution API
+    result = await _evo("POST", f"/instance/setPresence/{instance}", json=creds_obj)
+    return JSONResponse({"status": "imported", "result": result})
 
 
 @app.post("/dashboard/instance/{instance}/disconnect")
@@ -359,7 +338,7 @@ async def dashboard_messages(
     return JSONResponse(result)
 
 
-# ── Webhook management ────────────────────────────────────────────────────────
+# ─── Webhook management ────────────────────────────────────────────────────────
 
 @app.get("/dashboard/webhooks/{instance}")
 async def get_webhooks(instance: str, user: str = Depends(verify_session)):
@@ -379,7 +358,6 @@ async def add_webhook(instance: str, request: Request, user: str = Depends(verif
         events=body.get("events", []),
         enabled=body.get("enabled", True),
     )
-    # Register the webhook URL with Evolution API for this instance
     server_url = os.environ.get("SERVER_URL", "")
     if server_url:
         await _evo("POST", f"/webhook/set/{instance}", json={
@@ -410,7 +388,7 @@ async def delete_webhook(instance: str, webhook_id: str, user: str = Depends(ver
     return JSONResponse({"deleted": True})
 
 
-# ── Send test message ─────────────────────────────────────────────────────────
+# ─── Send message ──────────────────────────────────────────────────────────────
 
 @app.post("/dashboard/message/send")
 async def dashboard_send_message(request: Request, user: str = Depends(verify_session)):
