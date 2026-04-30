@@ -8,12 +8,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 # ── Evolution API ─────────────────────────────────────────────────────────────
-# Tag is 2.2.3 (not v2.2.3) — no fallback to avoid cloning wrong branch
+# Tag is 2.2.3 (not v2.2.3)
 RUN git clone --depth 1 --branch 2.2.3 https://github.com/EvolutionAPI/evolution-api.git /evolution-src
 
 WORKDIR /evolution-src
 
-# Schema is postgresql-schema.prisma, not the default schema.prisma
+# Schema is named postgresql-schema.prisma, not schema.prisma
 RUN npm install && \
     npx prisma generate --schema ./prisma/postgresql-schema.prisma && \
     npm run build && \
@@ -28,6 +28,10 @@ RUN pip install --no-cache-dir -r /app/requirements.txt
 
 COPY app/ /app/
 COPY config/ /config/
+
+# ── Startup script (runs migrations then starts Evolution API) ────────────────
+COPY start-evolution.sh /start-evolution.sh
+RUN chmod +x /start-evolution.sh
 
 # ── Supervisord config ────────────────────────────────────────────────────────
 COPY supervisord.conf /etc/supervisor/conf.d/supervisord.conf
