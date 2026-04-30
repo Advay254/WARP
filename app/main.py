@@ -48,7 +48,7 @@ async def wait_for_evolution():
     import httpx
     evo_url = f"http://localhost:{os.environ.get('EVOLUTION_PORT', '8080')}"
     logger.info("Waiting for Evolution API to start …")
-    for attempt in range(30):
+    for attempt in range(90):
         try:
             async with httpx.AsyncClient() as client:
                 r = await client.get(f"{evo_url}/", timeout=3)
