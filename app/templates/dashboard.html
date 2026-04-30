@@ -1,0 +1,1154 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"/>
+<title>WARP — Gateway</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet"/>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#080c12;
+  --s1:#0d1219;
+  --s2:#111820;
+  --s3:#171f2a;
+  --s4:#1d2735;
+  --border:rgba(255,255,255,.06);
+  --border2:rgba(255,255,255,.11);
+  --border3:rgba(255,255,255,.18);
+  --green:#22c55e;
+  --green-d:#16a34a;
+  --green-glow:rgba(34,197,94,.15);
+  --green-dim:rgba(34,197,94,.08);
+  --blue:#3b82f6;
+  --purple:#8b5cf6;
+  --amber:#f59e0b;
+  --red:#ef4444;
+  --cyan:#06b6d4;
+  --text:#e8edf5;
+  --text2:#a8b3c8;
+  --text3:#616e85;
+  --font:'DM Sans',system-ui,sans-serif;
+  --mono:'DM Mono',monospace;
+  --r:8px;--r2:12px;--r3:16px;--r4:20px;
+  --ease:cubic-bezier(.16,1,.3,1);
+  --sidebar:220px;
+  --shadow-sm:0 1px 3px rgba(0,0,0,.4);
+  --shadow:0 8px 32px rgba(0,0,0,.5);
+  --shadow-lg:0 24px 64px rgba(0,0,0,.6);
+}
+html,body{height:100%;font-family:var(--font);color:var(--text);background:var(--bg);overflow-x:hidden}
+body{
+  background-image:
+    radial-gradient(ellipse 120% 60% at -5% 0%,rgba(34,197,94,.07) 0%,transparent 55%),
+    radial-gradient(ellipse 80% 50% at 105% 100%,rgba(59,130,246,.06) 0%,transparent 50%);
+  background-attachment:fixed;
+}
+
+/* ═══ LAYOUT ═══════════════════════════════════════════════════════ */
+.layout{display:flex;min-height:100vh}
+.main{flex:1;margin-left:var(--sidebar);display:flex;flex-direction:column}
+
+/* ═══ SIDEBAR ══════════════════════════════════════════════════════ */
+.sidebar{
+  width:var(--sidebar);position:fixed;top:0;left:0;height:100vh;z-index:60;
+  background:rgba(8,12,18,.95);border-right:1px solid var(--border);
+  display:flex;flex-direction:column;backdrop-filter:blur(20px);
+  transition:transform .3s var(--ease);
+}
+.sb-brand{display:flex;align-items:center;gap:10px;padding:20px 18px;border-bottom:1px solid var(--border)}
+.sb-icon{
+  width:32px;height:32px;border-radius:9px;flex-shrink:0;
+  background:linear-gradient(135deg,var(--green-d),var(--green));
+  display:flex;align-items:center;justify-content:center;font-size:16px;
+  box-shadow:0 0 20px var(--green-glow);
+}
+.sb-name{font-size:.88rem;font-weight:700;color:#fff;letter-spacing:-.02em}
+.sb-tag{font-size:.6rem;color:var(--green);letter-spacing:.12em;text-transform:uppercase;margin-top:1px}
+
+.sb-nav{flex:1;overflow-y:auto;padding:12px 10px;scrollbar-width:none}
+.sb-nav::-webkit-scrollbar{display:none}
+.sb-sec{font-size:.62rem;color:var(--text3);letter-spacing:.1em;text-transform:uppercase;padding:10px 8px 4px;font-weight:600}
+.sb-item{
+  display:flex;align-items:center;gap:9px;padding:8px 10px;border-radius:var(--r2);
+  font-size:.82rem;color:var(--text2);cursor:pointer;
+  transition:all .18s;margin-bottom:1px;border:none;background:none;
+  width:100%;text-align:left;font-family:var(--font);
+}
+.sb-item:hover{background:var(--green-dim);color:var(--text)}
+.sb-item.active{background:rgba(34,197,94,.1);color:var(--green);font-weight:500}
+.sb-item .ico{width:16px;text-align:center;font-size:14px;flex-shrink:0;opacity:.7}
+.sb-item.active .ico{opacity:1}
+.sb-badge{margin-left:auto;font-size:.6rem;padding:2px 6px;border-radius:10px;background:var(--green-dim);color:var(--green);font-weight:700}
+
+.sb-footer{padding:14px 18px;border-top:1px solid var(--border)}
+.sb-user{display:flex;align-items:center;gap:9px}
+.sb-av{width:28px;height:28px;border-radius:var(--r);background:var(--s4);display:flex;align-items:center;justify-content:center;font-size:12px;flex-shrink:0;border:1px solid var(--border2)}
+.sb-username{font-size:.79rem;font-weight:500;flex:1;color:var(--text)}
+.sb-logout{font-size:.71rem;color:var(--text3);text-decoration:none;padding:3px 7px;border-radius:6px;transition:all .15s}
+.sb-logout:hover{background:rgba(239,68,68,.1);color:#fca5a5}
+
+/* ═══ TOPBAR ════════════════════════════════════════════════════════ */
+.topbar{
+  height:52px;display:flex;align-items:center;justify-content:space-between;
+  padding:0 24px;border-bottom:1px solid var(--border);
+  background:rgba(8,12,18,.85);backdrop-filter:blur(16px);
+  position:sticky;top:0;z-index:40;flex-shrink:0;gap:14px;
+}
+.tb-left{display:flex;align-items:center;gap:12px}
+.menu-btn{
+  display:none;width:30px;height:30px;border-radius:var(--r);border:1px solid var(--border2);
+  background:var(--s2);color:var(--text2);cursor:pointer;font-size:14px;
+  align-items:center;justify-content:center;flex-shrink:0;
+}
+.tb-crumb{font-size:.85rem;font-weight:600;color:#fff}
+.tb-sub{font-size:.72rem;color:var(--text3);margin-left:10px}
+.tb-right{display:flex;align-items:center;gap:10px}
+.tb-status{display:flex;align-items:center;gap:6px;font-size:.74rem;color:var(--text3)}
+.dot{width:7px;height:7px;border-radius:50%;flex-shrink:0}
+.dot-on{background:var(--green);box-shadow:0 0 6px var(--green);animation:pulse 2s infinite}
+.dot-off{background:var(--red)}
+.dot-warn{background:var(--amber);animation:pulse 1.5s infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.35}}
+
+/* ═══ CONTENT ═══════════════════════════════════════════════════════ */
+.content{padding:22px 24px;flex:1}
+.page{display:none}.page.active{display:block}
+
+/* ═══ STAT ROW ══════════════════════════════════════════════════════ */
+.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:22px}
+.stat{
+  background:var(--s1);border:1px solid var(--border);border-radius:var(--r3);
+  padding:16px 18px;transition:border-color .2s;position:relative;overflow:hidden;
+}
+.stat::after{content:"";position:absolute;inset:0;background:linear-gradient(135deg,rgba(255,255,255,.015),transparent);pointer-events:none}
+.stat:hover{border-color:var(--border2)}
+.stat.accent{border-color:rgba(34,197,94,.18);background:linear-gradient(135deg,rgba(34,197,94,.04),transparent)}
+.stat-label{font-size:.67rem;color:var(--text3);text-transform:uppercase;letter-spacing:.09em;font-weight:600;margin-bottom:8px}
+.stat-val{font-size:1.8rem;font-weight:700;color:#fff;line-height:1;letter-spacing:-.03em}
+.stat-sub{font-size:.71rem;color:var(--text3);margin-top:5px}
+
+/* ═══ PANEL ═════════════════════════════════════════════════════════ */
+.panel{background:var(--s1);border:1px solid var(--border);border-radius:var(--r3);margin-bottom:18px;overflow:hidden}
+.panel-hdr{
+  padding:13px 18px;border-bottom:1px solid var(--border);
+  display:flex;align-items:center;justify-content:space-between;gap:10px;
+}
+.panel-title{font-size:.84rem;font-weight:600;color:#fff;display:flex;align-items:center;gap:7px}
+.panel-body{padding:18px}
+
+/* ═══ INSTANCE GRID ═════════════════════════════════════════════════ */
+.inst-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px}
+
+.icard{
+  background:var(--s2);border:1px solid var(--border);border-radius:var(--r3);
+  overflow:hidden;transition:border-color .2s,transform .2s var(--ease),box-shadow .2s;
+}
+.icard:hover{border-color:var(--border2);transform:translateY(-1px);box-shadow:var(--shadow)}
+.icard.is-open{border-color:rgba(34,197,94,.2)}
+.icard.is-open:hover{box-shadow:0 8px 32px rgba(34,197,94,.08)}
+.icard.is-closed{border-color:rgba(239,68,68,.1)}
+.icard.is-connecting{border-color:rgba(245,158,11,.15)}
+
+.ic-head{padding:13px 15px;display:flex;align-items:center;gap:11px;border-bottom:1px solid var(--border)}
+.ic-av{
+  width:38px;height:38px;border-radius:11px;display:flex;align-items:center;
+  justify-content:center;font-size:17px;flex-shrink:0;
+}
+.ic-av.open{background:rgba(34,197,94,.12)}
+.ic-av.closed{background:rgba(107,114,128,.1)}
+.ic-av.connecting{background:rgba(245,158,11,.1)}
+.ic-meta{flex:1;min-width:0}
+.ic-name{font-size:.85rem;font-weight:600;color:#fff;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ic-owner{font-size:.7rem;color:var(--text3);font-family:var(--mono);margin-top:1px}
+
+.ic-body{padding:11px 15px;font-size:.77rem}
+.ic-row{display:flex;justify-content:space-between;align-items:center;padding:3px 0;border-bottom:1px solid rgba(255,255,255,.03)}
+.ic-row:last-child{border:none}
+.ic-row .k{color:var(--text3)}
+.ic-row .v{color:var(--text);font-weight:500}
+
+.ic-foot{padding:9px 15px;border-top:1px solid var(--border);display:flex;gap:5px;flex-wrap:wrap}
+
+.add-card{
+  background:transparent;border:1.5px dashed rgba(34,197,94,.15);
+  border-radius:var(--r3);min-height:180px;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  text-align:center;cursor:pointer;padding:20px;
+  transition:border-color .2s,background .2s;
+}
+.add-card:hover{border-color:rgba(34,197,94,.35);background:rgba(34,197,94,.03)}
+.add-card .ac-ico{font-size:1.8rem;opacity:.3;margin-bottom:9px}
+.add-card .ac-title{font-size:.84rem;font-weight:600;color:var(--green)}
+.add-card .ac-sub{font-size:.75rem;color:var(--text3);margin-top:4px}
+
+/* ═══ BADGES ════════════════════════════════════════════════════════ */
+.badge{display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:20px;font-size:.67rem;font-weight:600;letter-spacing:.02em;white-space:nowrap}
+.b-green{background:rgba(34,197,94,.1);color:#4ade80}
+.b-red{background:rgba(239,68,68,.1);color:#fca5a5}
+.b-amber{background:rgba(245,158,11,.1);color:#fcd34d}
+.b-blue{background:rgba(59,130,246,.1);color:#93c5fd}
+.b-purple{background:rgba(139,92,246,.1);color:#c4b5fd}
+.b-gray{background:rgba(107,114,128,.1);color:#9ca3af}
+
+/* ═══ BUTTONS ═══════════════════════════════════════════════════════ */
+.btn{
+  display:inline-flex;align-items:center;gap:5px;padding:7px 14px;
+  border:none;border-radius:var(--r2);font-size:.78rem;font-weight:600;
+  cursor:pointer;transition:all .18s;white-space:nowrap;font-family:var(--font);
+}
+.btn:active{transform:scale(.96)}
+.btn-primary{background:linear-gradient(135deg,var(--green-d),var(--green));color:#fff;box-shadow:0 2px 12px rgba(34,197,94,.22)}
+.btn-primary:hover{opacity:.88;box-shadow:0 4px 18px rgba(34,197,94,.32)}
+.btn-ghost{background:var(--s3);color:var(--text2);border:1px solid var(--border2)}
+.btn-ghost:hover{background:var(--s4);color:var(--text);border-color:var(--border3)}
+.btn-danger{background:rgba(239,68,68,.1);color:#fca5a5;border:1px solid rgba(239,68,68,.15)}
+.btn-danger:hover{background:rgba(239,68,68,.18)}
+.btn-sm{padding:5px 10px;font-size:.73rem}
+.btn-xs{padding:3px 7px;font-size:.68rem;border-radius:6px}
+.btn:disabled{opacity:.45;cursor:not-allowed;pointer-events:none}
+
+/* ═══ MODAL ═════════════════════════════════════════════════════════ */
+.overlay{position:fixed;inset:0;background:rgba(0,0,0,.8);z-index:100;display:flex;align-items:center;justify-content:center;padding:16px;backdrop-filter:blur(8px)}
+.overlay.hidden{display:none}
+.modal{
+  background:var(--s1);border:1px solid var(--border2);border-radius:var(--r4);
+  width:100%;max-width:500px;max-height:90vh;overflow-y:auto;box-shadow:var(--shadow-lg);
+}
+.modal-hdr{padding:18px 22px 14px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between}
+.modal-title{font-size:.92rem;font-weight:600;color:#fff;display:flex;align-items:center;gap:8px}
+.modal-x{width:26px;height:26px;border-radius:7px;border:none;background:var(--s3);color:var(--text2);cursor:pointer;font-size:13px;display:flex;align-items:center;justify-content:center;transition:all .15s}
+.modal-x:hover{background:var(--s4);color:var(--text)}
+.modal-body{padding:18px 22px}
+.modal-foot{padding:12px 22px;border-top:1px solid var(--border);display:flex;gap:7px;justify-content:flex-end}
+
+/* ═══ FORM ══════════════════════════════════════════════════════════ */
+.field{margin-bottom:14px}
+.field label{display:block;font-size:.76rem;color:var(--text2);font-weight:500;margin-bottom:5px}
+.field input,.field select,.field textarea{
+  width:100%;padding:9px 12px;background:var(--s2);border:1px solid var(--border2);
+  border-radius:var(--r2);color:var(--text);font-size:.82rem;font-family:var(--font);
+  outline:none;transition:border-color .15s,box-shadow .15s;
+}
+.field input:focus,.field select:focus,.field textarea:focus{
+  border-color:rgba(34,197,94,.4);box-shadow:0 0 0 3px rgba(34,197,94,.08);
+}
+.field select option{background:var(--s2)}
+.field textarea{resize:vertical;min-height:80px}
+.field .hint{font-size:.71rem;color:var(--text3);margin-top:4px;line-height:1.4}
+
+/* ═══ CONNECT TABS ══════════════════════════════════════════════════ */
+.ctabs{display:flex;background:var(--s2);border-radius:var(--r2);padding:3px;gap:3px;margin-bottom:18px}
+.ctab{
+  flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;
+  padding:8px 4px;border-radius:9px;border:none;background:none;
+  font-size:.74rem;font-weight:600;color:var(--text3);cursor:pointer;
+  transition:all .18s;font-family:var(--font);
+}
+.ctab .cico{font-size:1rem}
+.ctab:hover{color:var(--text);background:rgba(255,255,255,.04)}
+.ctab.active{background:rgba(34,197,94,.1);color:var(--green)}
+.cpanel{display:none}.cpanel.active{display:block}
+
+/* QR */
+.qr-wrap{text-align:center;padding:14px 0}
+.qr-box{
+  display:inline-flex;align-items:center;justify-content:center;
+  background:#fff;padding:10px;border-radius:12px;
+  width:192px;height:192px;margin-bottom:12px;
+}
+.qr-box img{width:172px;height:172px;display:block}
+.qr-loading{width:172px;height:172px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px}
+.qr-note{font-size:.78rem;color:var(--text3);line-height:1.6;text-align:center}
+.qr-note strong{color:var(--text2)}
+
+/* Pairing */
+.pair-code{
+  font-family:var(--mono);font-size:2rem;font-weight:700;
+  letter-spacing:.4em;color:var(--green);text-align:center;
+  background:rgba(34,197,94,.05);border:1.5px dashed rgba(34,197,94,.2);
+  border-radius:var(--r2);padding:18px;margin:14px 0;
+}
+.steps{list-style:none;display:flex;flex-direction:column;gap:0}
+.step{display:flex;align-items:flex-start;gap:10px;padding:8px 0;border-bottom:1px solid var(--border);font-size:.8rem;color:var(--text2)}
+.step:last-child{border:none}
+.step-n{width:20px;height:20px;border-radius:50%;background:rgba(34,197,94,.1);color:var(--green);font-size:.68rem;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:1px}
+
+/* ═══ WEBHOOKS TABLE ════════════════════════════════════════════════ */
+.wh-table{width:100%;border-collapse:collapse;font-size:.78rem}
+.wh-table th{padding:7px 10px;text-align:left;color:var(--text3);font-size:.67rem;text-transform:uppercase;letter-spacing:.07em;border-bottom:1px solid var(--border);font-weight:600}
+.wh-table td{padding:9px 10px;border-bottom:1px solid var(--border);color:var(--text);vertical-align:middle}
+.wh-table tr:last-child td{border:none}
+.wh-url{font-family:var(--mono);font-size:.7rem;color:var(--text3);max-width:170px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:block}
+
+/* Toggle */
+.tog{position:relative;width:32px;height:17px;display:inline-block}
+.tog input{width:0;height:0;opacity:0;position:absolute}
+.tog-sl{position:absolute;inset:0;background:rgba(255,255,255,.12);border-radius:17px;cursor:pointer;transition:background .18s}
+.tog-sl::after{content:"";position:absolute;left:3px;top:2.5px;width:12px;height:12px;border-radius:50%;background:#fff;transition:transform .18s}
+.tog input:checked + .tog-sl{background:var(--green-d)}
+.tog input:checked + .tog-sl::after{transform:translateX(15px)}
+
+/* Events */
+.ev-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:3px;max-height:150px;overflow-y:auto}
+.ev-item{display:flex;align-items:center;gap:6px;padding:5px 7px;border-radius:7px;font-size:.73rem;color:var(--text3);cursor:pointer;transition:all .15s}
+.ev-item:hover,.ev-item.on{background:rgba(34,197,94,.07);color:var(--green)}
+.ev-item input{accent-color:var(--green);width:12px;height:12px}
+
+/* Code block */
+.codeblock{background:rgba(0,0,0,.3);border:1px solid var(--border);border-radius:var(--r2);padding:11px 14px;font-family:var(--mono);font-size:.74rem;color:var(--text3);overflow-x:auto;white-space:pre;margin:8px 0;line-height:1.5}
+
+/* Empty state */
+.empty{text-align:center;padding:32px;color:var(--text3)}
+.empty-ico{font-size:1.8rem;opacity:.25;margin-bottom:8px}
+.empty p{font-size:.8rem}
+
+/* Alert */
+.alert{display:flex;gap:9px;padding:10px 13px;border-radius:var(--r2);font-size:.79rem;margin-bottom:12px;line-height:1.5}
+.a-green{background:rgba(34,197,94,.07);border:1px solid rgba(34,197,94,.18);color:#4ade80}
+.a-amber{background:rgba(245,158,11,.07);border:1px solid rgba(245,158,11,.18);color:#fcd34d}
+.a-blue{background:rgba(59,130,246,.07);border:1px solid rgba(59,130,246,.18);color:#93c5fd}
+.a-red{background:rgba(239,68,68,.07);border:1px solid rgba(239,68,68,.18);color:#fca5a5}
+
+/* Spinner */
+.spin{display:inline-block;width:12px;height:12px;border:2px solid rgba(255,255,255,.2);border-top-color:#fff;border-radius:50%;animation:rotate 1s linear infinite}
+.spin-g{border:2px solid rgba(34,197,94,.2);border-top-color:var(--green)}
+@keyframes rotate{to{transform:rotate(360deg)}}
+
+/* ═══ SEND PAGE ═════════════════════════════════════════════════════ */
+.bubble-preview{background:var(--s2);border-radius:var(--r2);padding:12px 14px;margin-top:12px}
+.bubble{
+  background:rgba(34,197,94,.1);border-radius:12px 12px 2px 12px;
+  display:inline-block;max-width:80%;padding:9px 13px;font-size:.83rem;color:var(--text);line-height:1.5;
+}
+
+/* ═══ TOAST ═════════════════════════════════════════════════════════ */
+#toasts{position:fixed;bottom:76px;right:14px;z-index:200;display:flex;flex-direction:column-reverse;gap:7px;pointer-events:none}
+@media(min-width:641px){.toasts-wrap{bottom:18px;right:18px}}
+.toast{
+  display:flex;align-items:center;gap:8px;padding:10px 15px;
+  border-radius:var(--r2);font-size:.8rem;font-weight:500;pointer-events:all;
+  animation:toast-in .25s var(--ease);max-width:300px;box-shadow:var(--shadow);
+}
+@keyframes toast-in{from{opacity:0;transform:translateX(12px)}}
+.t-ok{background:#052e16;border:1px solid rgba(34,197,94,.25);color:#4ade80}
+.t-err{background:#450a0a;border:1px solid rgba(239,68,68,.25);color:#fca5a5}
+.t-info{background:var(--s2);border:1px solid var(--border2);color:var(--text)}
+
+/* ═══ BOTTOM NAV (mobile) ═══════════════════════════════════════════ */
+.bnav{display:none;position:fixed;bottom:0;left:0;right:0;z-index:60;background:rgba(8,12,18,.97);border-top:1px solid var(--border);backdrop-filter:blur(20px);padding-bottom:env(safe-area-inset-bottom)}
+.bnav-inner{display:flex}
+.bnav-item{flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;padding:9px 4px 8px;border:none;background:none;font-size:.58rem;color:var(--text3);cursor:pointer;font-family:var(--font);transition:color .15s}
+.bnav-item .bi{font-size:18px;line-height:1}
+.bnav-item.active{color:var(--green)}
+.bnav-item:hover{color:var(--text)}
+.bnav-fab{position:relative}
+.bnav-fab .bi{width:38px;height:38px;background:linear-gradient(135deg,var(--green-d),var(--green));border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:20px;margin-top:-10px;box-shadow:0 0 18px var(--green-glow)}
+
+/* ═══ SIDEBAR OVERLAY ═══════════════════════════════════════════════ */
+.sb-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.65);z-index:55;backdrop-filter:blur(3px)}
+
+/* ═══ RESPONSIVE ════════════════════════════════════════════════════ */
+@media(max-width:640px){
+  .sidebar{transform:translateX(-100%)}
+  .sidebar.open{transform:translateX(0)}
+  .sb-overlay.open{display:block}
+  .main{margin-left:0}
+  .menu-btn{display:flex}
+  .content{padding:14px 14px 80px}
+  .topbar{padding:0 14px}
+  .stats{grid-template-columns:repeat(2,1fr);gap:9px;margin-bottom:16px}
+  .stat-val{font-size:1.5rem}
+  .inst-grid{grid-template-columns:1fr}
+  .bnav{display:block}
+  .modal{border-radius:var(--r3)}
+  .ev-grid{grid-template-columns:repeat(auto-fill,minmax(130px,1fr))}
+}
+@media(min-width:641px) and (max-width:1024px){
+  :root{--sidebar:200px}
+  .stats{grid-template-columns:repeat(2,1fr)}
+}
+</style>
+</head>
+<body>
+
+<!-- ══ Inject Jinja2 data as JSON — SAFE ZONE (no raw needed here) ══ -->
+<script>
+const _D = {
+  user:      {{ user | tojson }},
+  instances: {{ instances_json | safe }},
+  allEvents: {{ all_events_json | safe }},
+  serverUrl: {{ server_url | tojson }},
+  uptime:    {{ uptime }},
+  warmup:    {{ 'true' if warmup else 'false' }},
+  connected: {{ connected_count }},
+  total:     {{ total_count }},
+};
+</script>
+<!-- ══ END Jinja2 zone ══ -->
+
+<div class="sb-overlay" id="sbOverlay" onclick="closeSB()"></div>
+
+<!-- SIDEBAR -->
+<aside class="sidebar" id="sidebar">
+  <div class="sb-brand">
+    <div class="sb-icon">💬</div>
+    <div>
+      <div class="sb-name">WARP</div>
+      <div class="sb-tag">WhatsApp Gateway</div>
+    </div>
+  </div>
+  <nav class="sb-nav" id="sbnav">
+    <div class="sb-sec">Main</div>
+    <button class="sb-item active" id="nav-overview" onclick="goto('overview',this)">
+      <span class="ico">▣</span> Overview
+      <span class="sb-badge" id="nav-cnt">0</span>
+    </button>
+    <button class="sb-item" id="nav-send" onclick="goto('send',this)">
+      <span class="ico">↑</span> Send Message
+    </button>
+    <div class="sb-sec" style="margin-top:6px">Numbers</div>
+    <div id="sb-instances"></div>
+    <div class="sb-sec" style="margin-top:6px">Developer</div>
+    <button class="sb-item" id="nav-api" onclick="goto('api',this)">
+      <span class="ico">{}></span> API Reference
+    </button>
+  </nav>
+  <div class="sb-footer">
+    <div class="sb-user">
+      <div class="sb-av">👤</div>
+      <span class="sb-username" id="sb-user"></span>
+      <a href="/logout" class="sb-logout">Sign out</a>
+    </div>
+  </div>
+</aside>
+
+<!-- MAIN -->
+<div class="main">
+  <header class="topbar">
+    <div class="tb-left">
+      <button class="menu-btn" onclick="openSB()">☰</button>
+      <div>
+        <span class="tb-crumb" id="pg-title">Overview</span>
+        <span class="tb-sub" id="pg-sub">All instances</span>
+      </div>
+    </div>
+    <div class="tb-right">
+      <div class="tb-status">
+        <span class="dot dot-on" id="api-dot"></span>
+        <span id="uptime-disp">—</span>
+      </div>
+    </div>
+  </header>
+
+  <div class="content">
+
+    <!-- ── OVERVIEW ─────────────────────────────────────────────── -->
+    <div class="page active" id="page-overview">
+      <div class="stats">
+        <div class="stat accent">
+          <div class="stat-label">Connected</div>
+          <div class="stat-val" id="st-conn">0</div>
+          <div class="stat-sub">active sessions</div>
+        </div>
+        <div class="stat">
+          <div class="stat-label">Total Numbers</div>
+          <div class="stat-val" id="st-total">0</div>
+          <div class="stat-sub">registered</div>
+        </div>
+        <div class="stat">
+          <div class="stat-label">Uptime</div>
+          <div class="stat-val" id="st-uptime" style="font-size:1.2rem;padding-top:5px">—</div>
+          <div class="stat-sub">gateway running</div>
+        </div>
+        <div class="stat">
+          <div class="stat-label">Safety Mode</div>
+          <div class="stat-val" id="st-mode" style="font-size:1rem;padding-top:7px">—</div>
+          <div class="stat-sub">rate limiter</div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-hdr">
+          <div class="panel-title">📱 Phone Numbers</div>
+          <button class="btn btn-primary btn-sm" onclick="openM('m-add')">+ Add Number</button>
+        </div>
+        <div class="panel-body">
+          <div class="inst-grid" id="inst-grid">
+            <div class="add-card" onclick="openM('m-add')">
+              <div class="ac-ico">+</div>
+              <div class="ac-title">Add Phone Number</div>
+              <div class="ac-sub">Connect a WhatsApp number</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── INSTANCE DETAIL ───────────────────────────────────────── -->
+    <div class="page" id="page-instance">
+      <div class="panel">
+        <div class="panel-hdr">
+          <div class="panel-title" id="inst-title">📱 Instance</div>
+          <div style="display:flex;gap:6px">
+            <button class="btn btn-ghost btn-sm" onclick="restartCur()">↺ Restart</button>
+            <button class="btn btn-primary btn-sm" id="inst-connect-btn" onclick="openConnectFor(currentInst)">🔗 Connect</button>
+          </div>
+        </div>
+        <div class="panel-body">
+          <div class="stats" style="margin-bottom:16px;grid-template-columns:repeat(2,1fr)">
+            <div class="stat"><div class="stat-label">Status</div><div class="stat-val" id="inst-state" style="font-size:1rem;padding-top:6px">—</div></div>
+            <div class="stat"><div class="stat-label">Phone</div><div class="stat-val" id="inst-phone" style="font-size:1rem;padding-top:6px">—</div></div>
+          </div>
+          <div class="panel" style="margin-bottom:14px">
+            <div class="panel-hdr">
+              <div class="panel-title">🔔 Webhooks</div>
+              <button class="btn btn-ghost btn-sm" onclick="openWH(currentInst)">+ Add</button>
+            </div>
+            <div class="panel-body" id="inst-wh-body"><div class="empty"><div class="empty-ico">🔔</div><p>No webhooks</p></div></div>
+          </div>
+          <div class="panel">
+            <div class="panel-hdr"><div class="panel-title">📤 Quick Send</div></div>
+            <div class="panel-body">
+              <div class="field"><label>To (phone number)</label><input id="qi-to" type="tel" placeholder="254712345678"/></div>
+              <div class="field"><label>Message</label><textarea id="qi-msg" rows="3" placeholder="Type a message…"></textarea></div>
+              <button class="btn btn-primary btn-sm" onclick="quickSend()">Send</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── SEND ──────────────────────────────────────────────────── -->
+    <div class="page" id="page-send">
+      <div class="panel">
+        <div class="panel-hdr"><div class="panel-title">📤 Send Message</div></div>
+        <div class="panel-body">
+          <div class="field"><label>From (instance)</label>
+            <select id="send-inst"><option value="">— select a connected number —</option></select>
+          </div>
+          <div class="field"><label>To (phone number)</label>
+            <input id="send-to" type="tel" placeholder="254712345678" oninput="previewMsg()"/>
+          </div>
+          <div class="field"><label>Message</label>
+            <textarea id="send-txt" rows="4" placeholder="Type your message…" oninput="previewMsg()"></textarea>
+          </div>
+          <div class="bubble-preview">
+            <div class="bubble" id="send-preview">Your message here…</div>
+          </div>
+          <div style="margin-top:14px">
+            <button class="btn btn-primary" id="send-btn" onclick="sendMsg()">📤 Send Message</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── API DOCS ───────────────────────────────────────────────── -->
+    <div class="page" id="page-api">
+      <div class="panel">
+        <div class="panel-hdr"><div class="panel-title">{} API Reference</div></div>
+        <div class="panel-body">
+          <div class="alert a-blue">🔑 All requests need <code>Authorization: Bearer YOUR_EVOLUTION_API_KEY</code> or <code>apikey: ...</code> header.</div>
+          <p style="color:var(--text3);font-size:.81rem;margin-bottom:16px">Base URL: <code id="api-base" style="color:var(--green)"></code></p>
+          <div id="api-docs"></div>
+        </div>
+      </div>
+    </div>
+
+  </div><!-- /content -->
+</div><!-- /main -->
+
+<!-- BOTTOM NAV -->
+<nav class="bnav">
+  <div class="bnav-inner">
+    <button class="bnav-item active" id="bnav-overview" onclick="goto('overview',this,true)"><span class="bi">▣</span>Overview</button>
+    <button class="bnav-item" id="bnav-send" onclick="goto('send',this,true)"><span class="bi">↑</span>Send</button>
+    <button class="bnav-item bnav-fab" onclick="openM('m-add')"><span class="bi">+</span>Add</button>
+    <button class="bnav-item" id="bnav-api" onclick="goto('api',this,true)"><span class="bi">{}</span>API</button>
+    <button class="bnav-item" onclick="openSB()"><span class="bi">☰</span>Menu</button>
+  </div>
+</nav>
+
+<!-- ══ MODALS ════════════════════════════════════════════════════════ -->
+
+<!-- ADD INSTANCE -->
+<div class="overlay hidden" id="m-add">
+  <div class="modal">
+    <div class="modal-hdr"><div class="modal-title">➕ Add Phone Number</div><button class="modal-x" onclick="closeM('m-add')">✕</button></div>
+    <div class="modal-body">
+      <div class="field"><label>Instance Name</label><input id="add-name" placeholder="my_number"/><div class="hint">No spaces — used in API calls e.g. <code>my_number</code></div></div>
+      <div class="field"><label>Phone Number <span style="color:var(--text3)">(optional, connect later)</span></label><input id="add-phone" type="tel" placeholder="254712345678"/><div class="hint">Country code, no + or spaces</div></div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-ghost" onclick="closeM('m-add')">Cancel</button>
+      <button class="btn btn-primary" onclick="createInst()">Create</button>
+    </div>
+  </div>
+</div>
+
+<!-- CONNECT -->
+<div class="overlay hidden" id="m-connect">
+  <div class="modal">
+    <div class="modal-hdr">
+      <div class="modal-title">🔗 Connect — <span id="cn-name"></span></div>
+      <button class="modal-x" onclick="closeM('m-connect')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="ctabs">
+        <button class="ctab active" id="ct-qr" onclick="switchCT('qr',this)"><span class="cico">📷</span>QR Code</button>
+        <button class="ctab" id="ct-pair" onclick="switchCT('pair',this)"><span class="cico">📱</span>Pairing Code</button>
+        <button class="ctab" id="ct-token" onclick="switchCT('token',this)"><span class="cico">🔑</span>Session Token</button>
+      </div>
+      <!-- QR panel -->
+      <div class="cpanel active" id="cp-qr">
+        <div class="qr-wrap">
+          <div class="qr-box" id="qr-box">
+            <div class="qr-loading" id="qr-loader"><div class="spin spin-g"></div><div style="font-size:.73rem;color:var(--text3)">Loading…</div></div>
+            <img id="qr-img" style="display:none;width:172px;height:172px" alt="QR"/>
+          </div>
+          <div class="qr-note">Open WhatsApp → <strong>Linked Devices</strong> → <strong>Link a Device</strong> → scan above</div>
+          <button class="btn btn-ghost btn-sm" style="margin-top:10px" onclick="refreshQR()">↻ Refresh</button>
+        </div>
+        <div class="alert a-green hidden" id="qr-ok">✅ Connected successfully!</div>
+      </div>
+      <!-- Pair panel -->
+      <div class="cpanel" id="cp-pair">
+        <div id="pair-s1">
+          <div class="alert a-blue">Enter your phone number to get an 8-digit pairing code.</div>
+          <div class="field"><label>Phone Number</label><input id="pair-num" type="tel" placeholder="254712345678"/><div class="hint">Country code, no + or spaces</div></div>
+          <button class="btn btn-primary" id="pair-btn" onclick="getPairCode()">Get Code</button>
+        </div>
+        <div id="pair-s2" style="display:none">
+          <div class="pair-code" id="pair-code">— — — —</div>
+          <ol class="steps">
+            <li class="step"><span class="step-n">1</span>Open WhatsApp on your phone</li>
+            <li class="step"><span class="step-n">2</span>Go to <strong>Settings → Linked Devices</strong></li>
+            <li class="step"><span class="step-n">3</span>Tap <strong>Link a Device</strong></li>
+            <li class="step"><span class="step-n">4</span>Tap <strong>"Link with phone number instead"</strong></li>
+            <li class="step"><span class="step-n">5</span>Enter the code shown above</li>
+          </ol>
+          <button class="btn btn-ghost btn-sm" style="margin-top:10px" onclick="resetPair()">↩ Try different number</button>
+        </div>
+      </div>
+      <!-- Token panel -->
+      <div class="cpanel" id="cp-token">
+        <div class="alert a-amber">⚠ Advanced — paste a Baileys session credentials JSON from a previous deployment.</div>
+        <div class="field"><label>Credentials JSON</label><textarea id="tok-json" rows="5" placeholder='{"noiseKey":{"private":{"type":"Buffer","data":[...]}},...}'></textarea></div>
+        <button class="btn btn-primary" id="tok-btn" onclick="importTok()">Import Session</button>
+        <div class="alert a-green hidden" id="tok-ok" style="margin-top:10px">✅ Session imported!</div>
+      </div>
+    </div>
+    <div class="modal-foot"><button class="btn btn-ghost" onclick="closeM('m-connect')">Close</button></div>
+  </div>
+</div>
+
+<!-- WEBHOOKS -->
+<div class="overlay hidden" id="m-wh">
+  <div class="modal" style="max-width:540px">
+    <div class="modal-hdr"><div class="modal-title">🔔 Webhooks — <span id="wh-inst-name"></span></div><button class="modal-x" onclick="closeM('m-wh')">✕</button></div>
+    <div class="modal-body">
+      <div id="wh-list-wrap" style="margin-bottom:16px"></div>
+      <div style="border-top:1px solid var(--border);padding-top:14px">
+        <div style="font-size:.7rem;color:var(--text3);text-transform:uppercase;letter-spacing:.08em;font-weight:600;margin-bottom:10px">Add Webhook</div>
+        <div class="field"><label>Label</label><input id="wh-label" placeholder="n8n workflow"/></div>
+        <div class="field"><label>URL</label><input id="wh-url" placeholder="https://your-n8n.app/webhook/whatsapp"/></div>
+        <div class="field">
+          <label>Events <span style="color:var(--text3)">(none = all)</span></label>
+          <div style="display:flex;gap:5px;margin-bottom:6px">
+            <button class="btn btn-ghost btn-xs" onclick="evAll(true)">All</button>
+            <button class="btn btn-ghost btn-xs" onclick="evAll(false)">None</button>
+          </div>
+          <div class="ev-grid" id="ev-grid"></div>
+        </div>
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-ghost" onclick="closeM('m-wh')">Close</button>
+      <button class="btn btn-primary" onclick="addWH()">Add Webhook</button>
+    </div>
+  </div>
+</div>
+
+<div id="toasts" class="toasts-wrap"></div>
+
+<!-- ══ JAVASCRIPT — wrapped in raw to prevent Jinja2 parsing ══════ -->
+{% raw %}
+<script>
+// ══════════════════════════════════════════════════════════════════
+// INIT FROM SERVER DATA
+// ══════════════════════════════════════════════════════════════════
+const INSTANCES = _D.instances;
+const ALL_EVENTS = _D.allEvents;
+const SERVER_URL = _D.serverUrl;
+let uptimeSec = _D.uptime;
+let currentInst = null;
+let connectInst = null;
+let whInst = null;
+let qrTimer = null;
+
+// Populate static data
+document.getElementById('sb-user').textContent = _D.user;
+document.getElementById('nav-cnt').textContent = _D.connected;
+document.getElementById('st-conn').textContent = _D.connected;
+document.getElementById('st-total').textContent = _D.total;
+document.getElementById('st-mode').innerHTML = _D.warmup
+  ? '<span class="badge b-amber">Warmup</span>'
+  : '<span class="badge b-green">Live</span>';
+document.getElementById('api-base').textContent = SERVER_URL + '/api';
+
+// Build API docs
+document.getElementById('api-docs').innerHTML = [
+  ['Fetch all instances', 'GET', '/instance/fetchInstances'],
+  ['Instance connection state', 'GET', '/instance/connectionState/{name}'],
+  ['Connect instance (QR)', 'GET', '/instance/connect/{name}'],
+  ['Send message (safe)', 'POST', '/message/safe/{name}'],
+  ['Receive webhooks', 'POST', '* /webhook/{name}  (set in Evolution)'],
+].map(([title, method, path]) => `
+  <div style="margin-bottom:16px">
+    <div style="font-weight:600;color:#fff;font-size:.82rem;margin-bottom:4px">${title}</div>
+    <div class="codeblock"><span style="color:var(--green)">${method}</span>  ${path.startsWith('*') ? path.slice(2) : SERVER_URL + '/api' + path}</div>
+  </div>`).join('');
+
+// Build sidebar instance list
+function buildSBInstances() {
+  const el = document.getElementById('sb-instances');
+  el.innerHTML = INSTANCES.map(i => {
+    const name = i.instance?.instanceName || '?';
+    const state = i.instance?.state || 'unknown';
+    const ico = state === 'open' ? '🟢' : state === 'connecting' ? '🟡' : '🔴';
+    return `<button class="sb-item" onclick="gotoInst('${name}',this)">
+      <span class="ico">${ico}</span>
+      <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;text-align:left">${name}</span>
+    </button>`;
+  }).join('');
+}
+buildSBInstances();
+
+// Build send instance select
+function buildSendSelect() {
+  const sel = document.getElementById('send-inst');
+  INSTANCES.filter(i => i.instance?.state === 'open').forEach(i => {
+    const name = i.instance.instanceName;
+    const opt = document.createElement('option');
+    opt.value = name;
+    opt.textContent = name + (i.instance.owner ? ' (' + i.instance.owner + ')' : '');
+    sel.appendChild(opt);
+  });
+}
+buildSendSelect();
+
+// Build event grid
+function buildEvGrid() {
+  document.getElementById('ev-grid').innerHTML = ALL_EVENTS.map(ev =>
+    `<label class="ev-item"><input type="checkbox" name="ev" value="${ev}"/>${ev}</label>`
+  ).join('');
+  document.querySelectorAll('input[name="ev"]').forEach(c => {
+    c.addEventListener('change', () => c.closest('.ev-item').classList.toggle('on', c.checked));
+  });
+}
+buildEvGrid();
+
+// Build instance grid
+function buildGrid() {
+  const grid = document.getElementById('inst-grid');
+  const cards = INSTANCES.map(i => {
+    const name  = i.instance?.instanceName || '?';
+    const state = i.instance?.state || 'unknown';
+    const owner = i.instance?.owner || '';
+    const isOpen   = state === 'open';
+    const isConn   = state === 'connecting';
+    const cls = isOpen ? 'is-open' : isConn ? 'is-connecting' : 'is-closed';
+    const ico = isOpen ? '📱' : isConn ? '🔄' : '📵';
+    const avcls = isOpen ? 'open' : isConn ? 'connecting' : 'closed';
+    const bclass = isOpen ? 'b-green' : isConn ? 'b-amber' : 'b-red';
+    const blabel = isOpen ? 'Online' : isConn ? 'Linking' : 'Offline';
+    return `<div class="icard ${cls}" data-name="${name}">
+      <div class="ic-head">
+        <div class="ic-av ${avcls}">${ico}</div>
+        <div class="ic-meta">
+          <div class="ic-name">${esc(name)}</div>
+          <div class="ic-owner">${esc(owner) || 'Not linked'}</div>
+        </div>
+        <span class="badge ${bclass}">${blabel}</span>
+      </div>
+      <div class="ic-body">
+        <div class="ic-row"><span class="k">Integration</span><span class="v">Baileys</span></div>
+        <div class="ic-row"><span class="k">Webhooks</span><span class="v badge b-blue" id="wh-badge-${name}">—</span></div>
+      </div>
+      <div class="ic-foot">
+        ${!isOpen
+          ? `<button class="btn btn-primary btn-sm" onclick="openConnectFor('${name}')">🔗 Connect</button>`
+          : `<button class="btn btn-ghost btn-sm" onclick="disconnectInst('${name}')">⏏ Disconnect</button>`}
+        <button class="btn btn-ghost btn-sm" onclick="openWH('${name}')">🔔 Webhooks</button>
+        <button class="btn btn-ghost btn-sm" onclick="gotoInst('${name}')">Detail →</button>
+        <button class="btn btn-danger btn-sm" onclick="deleteInst('${name}')">🗑</button>
+      </div>
+    </div>`;
+  }).join('');
+  grid.innerHTML = cards + `<div class="add-card" onclick="openM('m-add')">
+    <div class="ac-ico">+</div>
+    <div class="ac-title">Add Phone Number</div>
+    <div class="ac-sub">Connect a WhatsApp number</div>
+  </div>`;
+  // Load webhook badge counts
+  INSTANCES.forEach(i => loadWHBadge(i.instance?.instanceName));
+}
+buildGrid();
+
+// ══════════════════════════════════════════════════════════════════
+// NAVIGATION
+// ══════════════════════════════════════════════════════════════════
+const PAGE_META = {
+  overview: {title:'Overview', sub:'All instances'},
+  send:     {title:'Send Message', sub:'Send via any connected number'},
+  api:      {title:'API Reference', sub:'Integration documentation'},
+};
+
+function goto(page, el, fromBnav=false) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.sb-item,.bnav-item').forEach(n => n.classList.remove('active'));
+  document.getElementById('page-' + page).classList.add('active');
+  if (el) el.classList.add('active');
+  const nav = document.getElementById('nav-' + page);
+  if (nav) nav.classList.add('active');
+  const bn = document.getElementById('bnav-' + page);
+  if (bn) bn.classList.add('active');
+  const m = PAGE_META[page] || {title:page, sub:''};
+  document.getElementById('pg-title').textContent = m.title;
+  document.getElementById('pg-sub').textContent = m.sub;
+  closeSB();
+}
+
+function gotoInst(name, el) {
+  currentInst = name;
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.sb-item,.bnav-item').forEach(n => n.classList.remove('active'));
+  if (el) el.classList.add('active');
+  document.getElementById('page-instance').classList.add('active');
+  document.getElementById('pg-title').textContent = name;
+  document.getElementById('pg-sub').textContent = 'Instance detail';
+  document.getElementById('inst-title').textContent = '📱 ' + name;
+  loadInstDetail(name);
+  closeSB();
+}
+
+async function loadInstDetail(name) {
+  const res = await api('GET', '/dashboard/instance/' + name + '/status');
+  const state = res?.instance?.state || 'unknown';
+  const owner = res?.instance?.owner || '—';
+  document.getElementById('inst-state').innerHTML =
+    '<span class="badge ' + (state==='open'?'b-green':state==='connecting'?'b-amber':'b-red') + '">'
+    + state.toUpperCase() + '</span>';
+  document.getElementById('inst-phone').textContent = owner;
+  document.getElementById('inst-connect-btn').style.display = state === 'open' ? 'none' : '';
+  loadInstWH(name);
+}
+
+async function loadInstWH(name) {
+  const res = await api('GET', '/dashboard/webhooks/' + name);
+  renderWHTable(document.getElementById('inst-wh-body'), res?.webhooks||[], name);
+}
+
+// ══════════════════════════════════════════════════════════════════
+// SIDEBAR
+// ══════════════════════════════════════════════════════════════════
+function openSB()  { document.getElementById('sidebar').classList.add('open'); document.getElementById('sbOverlay').classList.add('open'); }
+function closeSB() { document.getElementById('sidebar').classList.remove('open'); document.getElementById('sbOverlay').classList.remove('open'); }
+
+// ══════════════════════════════════════════════════════════════════
+// MODALS
+// ══════════════════════════════════════════════════════════════════
+function openM(id)  { document.getElementById(id).classList.remove('hidden'); }
+function closeM(id) { document.getElementById(id).classList.add('hidden'); if (id === 'm-connect') stopQR(); }
+document.querySelectorAll('.overlay').forEach(o => {
+  o.addEventListener('click', e => { if (e.target === o) { o.classList.add('hidden'); stopQR(); }});
+});
+
+// ══════════════════════════════════════════════════════════════════
+// API HELPER
+// ══════════════════════════════════════════════════════════════════
+async function api(method, path, body) {
+  try {
+    const opts = {method, credentials:'same-origin', headers:{'Content-Type':'application/json'}};
+    if (body && method !== 'GET') opts.body = JSON.stringify(body);
+    const r = await fetch(path, opts);
+    return await r.json().catch(() => ({}));
+  } catch(e) { toast(e.message, 'err'); return {error:e.message}; }
+}
+function esc(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+// ══════════════════════════════════════════════════════════════════
+// TOAST
+// ══════════════════════════════════════════════════════════════════
+function toast(msg, type='info') {
+  const el = document.createElement('div');
+  el.className = 'toast t-' + (type==='err'?'err':type==='ok'?'ok':'info');
+  el.innerHTML = (type==='ok'?'✓':type==='err'?'✗':'ℹ') + ' ' + msg;
+  document.getElementById('toasts').appendChild(el);
+  setTimeout(() => el.remove(), 4000);
+}
+
+// ══════════════════════════════════════════════════════════════════
+// INSTANCES
+// ══════════════════════════════════════════════════════════════════
+async function createInst() {
+  const name = document.getElementById('add-name').value.trim().replace(/\s+/g,'_');
+  if (!name) { toast('Name required','err'); return; }
+  const res = await api('POST', '/dashboard/instance/create', {
+    instanceName: name,
+    number: document.getElementById('add-phone').value.trim().replace('+',''),
+  });
+  if (res.error) { toast(res.error, 'err'); return; }
+  toast('Instance "' + name + '" created', 'ok');
+  closeM('m-add');
+  setTimeout(() => location.reload(), 1500);
+}
+
+async function deleteInst(name) {
+  if (!confirm('Delete "' + name + '"? This removes the number and all webhooks.')) return;
+  await api('DELETE', '/dashboard/instance/' + name);
+  toast('"' + name + '" deleted', 'ok');
+  setTimeout(() => location.reload(), 1200);
+}
+
+async function disconnectInst(name) {
+  if (!confirm('Disconnect "' + name + '" from WhatsApp?')) return;
+  await api('POST', '/dashboard/instance/' + name + '/disconnect');
+  toast(name + ' disconnected');
+  setTimeout(() => location.reload(), 1200);
+}
+
+async function restartCur() {
+  if (!currentInst) return;
+  await api('POST', '/dashboard/instance/' + currentInst + '/restart');
+  toast(currentInst + ' restarting…');
+}
+
+// ══════════════════════════════════════════════════════════════════
+// CONNECT MODAL
+// ══════════════════════════════════════════════════════════════════
+function openConnectFor(name) {
+  connectInst = name;
+  document.getElementById('cn-name').textContent = name;
+  resetPair();
+  document.getElementById('qr-ok').classList.add('hidden');
+  document.getElementById('tok-ok').classList.add('hidden');
+  document.getElementById('tok-json').value = '';
+  switchCT('qr', document.getElementById('ct-qr'));
+  openM('m-connect');
+}
+
+function switchCT(tab, btn) {
+  document.querySelectorAll('.ctab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.cpanel').forEach(p => p.classList.remove('active'));
+  btn.classList.add('active');
+  document.getElementById('cp-' + tab).classList.add('active');
+  stopQR();
+  if (tab === 'qr') startQR();
+}
+
+// QR
+async function startQR() {
+  showQRLoader();
+  await fetchQR();
+  qrTimer = setInterval(async () => {
+    const s = await api('GET', '/dashboard/instance/' + connectInst + '/status');
+    if (s?.instance?.state === 'open') {
+      stopQR();
+      document.getElementById('qr-ok').classList.remove('hidden');
+      document.getElementById('qr-box').innerHTML = '<div style="font-size:3rem">✅</div>';
+      setTimeout(() => location.reload(), 2000);
+      return;
+    }
+    await fetchQR();
+  }, 20000);
+}
+
+async function fetchQR() {
+  const res = await api('GET', '/dashboard/instance/' + connectInst + '/qrcode');
+  const b64 = res?.base64 || res?.qrcode?.base64;
+  if (b64) {
+    document.getElementById('qr-loader').style.display = 'none';
+    const img = document.getElementById('qr-img');
+    img.src = b64.startsWith('data:') ? b64 : 'data:image/png;base64,' + b64;
+    img.style.display = 'block';
+  }
+}
+function showQRLoader() {
+  document.getElementById('qr-loader').style.display = 'flex';
+  document.getElementById('qr-img').style.display = 'none';
+}
+async function refreshQR() { showQRLoader(); await fetchQR(); }
+function stopQR() { if (qrTimer) { clearInterval(qrTimer); qrTimer = null; } }
+
+// Pairing
+async function getPairCode() {
+  const num = document.getElementById('pair-num').value.trim().replace('+','').replace(/\s/g,'');
+  if (!num || num.length < 7) { toast('Enter a valid number','err'); return; }
+  const btn = document.getElementById('pair-btn');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spin"></span> Requesting…';
+  const res = await api('POST', '/dashboard/instance/' + connectInst + '/connect', {number:num});
+  btn.disabled = false;
+  btn.textContent = 'Get Code';
+  const code = res?.code || res?.pairingCode || res?.data?.code;
+  if (code) {
+    document.getElementById('pair-code').textContent = code;
+    document.getElementById('pair-s1').style.display = 'none';
+    document.getElementById('pair-s2').style.display = 'block';
+  } else {
+    toast(res?.message || res?.error || 'Could not get pairing code', 'err');
+  }
+}
+function resetPair() {
+  document.getElementById('pair-s1').style.display = 'block';
+  document.getElementById('pair-s2').style.display = 'none';
+  document.getElementById('pair-num').value = '';
+  document.getElementById('pair-code').textContent = '— — — —';
+}
+
+// Session token
+async function importTok() {
+  const raw = document.getElementById('tok-json').value.trim();
+  if (!raw) { toast('Paste credentials JSON first','err'); return; }
+  const btn = document.getElementById('tok-btn');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spin"></span> Importing…';
+  const res = await api('POST', '/dashboard/instance/' + connectInst + '/import-session', {credentials:raw});
+  btn.disabled = false;
+  btn.textContent = 'Import Session';
+  if (res.error) { toast(res.error,'err'); return; }
+  document.getElementById('tok-ok').classList.remove('hidden');
+  toast('Session imported!','ok');
+  setTimeout(() => location.reload(), 2500);
+}
+
+// ══════════════════════════════════════════════════════════════════
+// WEBHOOKS
+// ══════════════════════════════════════════════════════════════════
+async function openWH(name) {
+  whInst = name;
+  document.getElementById('wh-inst-name').textContent = name;
+  document.getElementById('wh-label').value = '';
+  document.getElementById('wh-url').value = '';
+  evAll(false);
+  await loadWHList(name);
+  openM('m-wh');
+}
+
+async function loadWHList(name) {
+  const res = await api('GET', '/dashboard/webhooks/' + name);
+  renderWHTable(document.getElementById('wh-list-wrap'), res?.webhooks||[], name, true);
+}
+
+async function loadWHBadge(name) {
+  const res = await api('GET', '/dashboard/webhooks/' + name);
+  const badge = document.getElementById('wh-badge-' + name);
+  if (badge) badge.textContent = (res?.webhooks||[]).length + ' hooks';
+}
+
+function renderWHTable(container, hooks, name, inModal=false) {
+  if (!hooks.length) {
+    container.innerHTML = '<div class="empty"><div class="empty-ico">🔔</div><p>No webhooks yet</p></div>';
+    return;
+  }
+  container.innerHTML = '<table class="wh-table"><thead><tr><th>Label</th><th>URL</th><th>Events</th><th>On</th><th></th></tr></thead><tbody>'
+    + hooks.map(w => `<tr>
+        <td style="font-weight:600">${esc(w.label||w.id)}</td>
+        <td><span class="wh-url" title="${esc(w.url)}">${esc(w.url)}</span></td>
+        <td>${w.events?.length ? '<span class="badge b-blue">'+w.events.length+'</span>' : '<span class="badge b-green">All</span>'}</td>
+        <td><label class="tog"><input type="checkbox" ${w.enabled?'checked':''} onchange="toggleWH('${name}','${w.id}',this.checked)"/><span class="tog-sl"></span></label></td>
+        <td><button class="btn btn-danger btn-xs" onclick="removeWH('${name}','${w.id}')">✕</button></td>
+      </tr>`).join('')
+    + '</tbody></table>';
+}
+
+async function addWH() {
+  const url   = document.getElementById('wh-url').value.trim();
+  const label = document.getElementById('wh-label').value.trim();
+  const evts  = [...document.querySelectorAll('input[name="ev"]:checked')].map(c => c.value);
+  if (!url) { toast('URL required','err'); return; }
+  const res = await api('POST', '/dashboard/webhooks/' + whInst, {url, label, events:evts});
+  if (res.error) { toast(res.error,'err'); return; }
+  toast('Webhook added','ok');
+  document.getElementById('wh-url').value = '';
+  document.getElementById('wh-label').value = '';
+  evAll(false);
+  loadWHList(whInst);
+  loadWHBadge(whInst);
+  if (currentInst === whInst) loadInstWH(whInst);
+}
+
+async function toggleWH(inst, id, enabled) {
+  await api('PATCH', '/dashboard/webhooks/' + inst + '/' + id, {enabled});
+  toast('Webhook ' + (enabled?'enabled':'disabled'));
+}
+
+async function removeWH(inst, id) {
+  await api('DELETE', '/dashboard/webhooks/' + inst + '/' + id);
+  toast('Webhook removed','ok');
+  loadWHList(inst);
+  loadWHBadge(inst);
+  if (currentInst === inst) loadInstWH(inst);
+}
+
+function evAll(on) {
+  document.querySelectorAll('input[name="ev"]').forEach(c => {
+    c.checked = on;
+    c.closest('.ev-item').classList.toggle('on', on);
+  });
+}
+
+// ══════════════════════════════════════════════════════════════════
+// SEND MESSAGE
+// ══════════════════════════════════════════════════════════════════
+function previewMsg() {
+  document.getElementById('send-preview').textContent = document.getElementById('send-txt').value || 'Your message here…';
+}
+
+async function sendMsg() {
+  const instance = document.getElementById('send-inst').value;
+  const number   = document.getElementById('send-to').value.trim().replace('+','');
+  const text     = document.getElementById('send-txt').value.trim();
+  if (!instance||!number||!text) { toast('Fill in all fields','err'); return; }
+  const btn = document.getElementById('send-btn');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spin"></span> Sending…';
+  const res = await api('POST', '/dashboard/send', {instance, number, text});
+  btn.disabled = false;
+  btn.textContent = '📤 Send Message';
+  if (res.error) { toast(res.error,'err'); return; }
+  toast('Message sent!','ok');
+  document.getElementById('send-txt').value = '';
+  previewMsg();
+}
+
+async function quickSend() {
+  const number = document.getElementById('qi-to').value.trim().replace('+','');
+  const text   = document.getElementById('qi-msg').value.trim();
+  if (!number||!text) { toast('Fill in number and message','err'); return; }
+  const res = await api('POST', '/dashboard/send', {instance:currentInst, number, text});
+  if (res.error) { toast(res.error,'err'); return; }
+  toast('Message sent!','ok');
+  document.getElementById('qi-msg').value = '';
+}
+
+// ══════════════════════════════════════════════════════════════════
+// UPTIME
+// ══════════════════════════════════════════════════════════════════
+function fmtUp(s) {
+  const h=Math.floor(s/3600), m=Math.floor((s%3600)/60), sec=s%60;
+  return h > 0 ? h+'h '+m+'m' : m > 0 ? m+'m '+sec+'s' : sec+'s';
+}
+setInterval(() => {
+  uptimeSec++;
+  document.getElementById('st-uptime').textContent = fmtUp(uptimeSec);
+  document.getElementById('uptime-disp').textContent = fmtUp(uptimeSec);
+}, 1000);
+document.getElementById('st-uptime').textContent = fmtUp(uptimeSec);
+document.getElementById('uptime-disp').textContent = fmtUp(uptimeSec);
+</script>
+{% endraw %}
+</body>
+</html>
