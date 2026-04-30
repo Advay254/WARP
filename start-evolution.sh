@@ -11,7 +11,7 @@ cp -rf ./prisma/postgresql-migrations/. ./prisma/migrations/ 2>/dev/null
 echo "[WARP] Migration files staged."
 
 echo "[WARP] Running: prisma migrate deploy..."
-npx prisma migrate deploy --schema ./prisma/postgresql-schema.prisma 2>&1
+timeout 120 npx prisma migrate deploy --schema ./prisma/postgresql-schema.prisma 2>&1
 MIGRATE_EXIT=$?
 
 if [ "$MIGRATE_EXIT" = "0" ]; then
