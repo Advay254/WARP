@@ -36,7 +36,6 @@ app = FastAPI(title="WARP", docs_url=None, redoc_url=None)
 BASE_DIR  = os.path.dirname(__file__)
 templates = Jinja2Templates(directory=os.path.join(BASE_DIR, "templates"))
 register_handlers(app)
-start_watcher(app, _get_instances)
 
 
 # ── Internal Evolution API helper ─────────────────────────────────────────────
@@ -58,6 +57,9 @@ async def _evo(method: str, path: str, **kwargs) -> dict:
 async def _get_instances() -> list:
     data = await _evo("GET", "/instance/fetchInstances")
     return data if isinstance(data, list) else []
+
+
+start_watcher(app, _get_instances)
 
 
 # ── Public ────────────────────────────────────────────────────────────────────
