@@ -410,6 +410,10 @@ const _D = {
     </button>
     <div class="sb-sec" style="margin-top:6px">Numbers</div>
     <div id="sb-instances"></div>
+    <div class="sb-sec" style="margin-top:6px">Automation</div>
+    <button class="sb-item" id="nav-status" onclick="goto('status',this)">
+      <span class="ico">👁</span> Status Viewer
+    </button>
     <div class="sb-sec" style="margin-top:6px">Developer</div>
     <button class="sb-item" id="nav-api" onclick="goto('api',this)">
       <span class="ico">{}></span> API Reference
@@ -556,6 +560,34 @@ const _D = {
       </div>
     </div>
 
+
+    <!-- ── STATUS AUTOMATION ────────────────────────────────────── -->
+    <div class="page" id="page-status">
+      <div class="panel">
+        <div class="panel-hdr">
+          <div class="panel-title">👁 Status Viewer Automation</div>
+          <span class="badge b-blue" id="sw-global-badge">0 enabled</span>
+        </div>
+        <div class="panel-body">
+          <div class="alert a-blue" style="margin-bottom:18px">
+            Automatically views all WhatsApp statuses at random intervals and likes a random subset.
+            Configure per connected instance below.
+          </div>
+          <div id="sw-instances-wrap">
+            <div class="empty"><div class="empty-ico">📱</div><p>No connected instances</p></div>
+          </div>
+        </div>
+      </div>
+      <div class="panel">
+        <div class="panel-hdr"><div class="panel-title">📋 Activity Log</div>
+          <button class="btn btn-ghost btn-sm" onclick="loadSWLog()">↻ Refresh</button>
+        </div>
+        <div class="panel-body" id="sw-log-wrap">
+          <div class="empty"><div class="empty-ico">📋</div><p>No activity yet</p></div>
+        </div>
+      </div>
+    </div>
+
   </div><!-- /content -->
 </div><!-- /main -->
 
@@ -565,7 +597,7 @@ const _D = {
     <button class="bnav-item active" id="bnav-overview" onclick="goto('overview',this,true)"><span class="bi">▣</span>Overview</button>
     <button class="bnav-item" id="bnav-send" onclick="goto('send',this,true)"><span class="bi">↑</span>Send</button>
     <button class="bnav-item bnav-fab" onclick="openM('m-add')"><span class="bi">+</span>Add</button>
-    <button class="bnav-item" id="bnav-api" onclick="goto('api',this,true)"><span class="bi">{}</span>API</button>
+    <button class="bnav-item" id="bnav-status" onclick="goto('status',this,true)"><span class="bi">👁</span>Status</button>
     <button class="bnav-item" onclick="openSB()"><span class="bi">☰</span>Menu</button>
   </div>
 </nav>
@@ -803,6 +835,7 @@ const PAGE_META = {
   overview: {title:'Overview', sub:'All instances'},
   send:     {title:'Send Message', sub:'Send via any connected number'},
   api:      {title:'API Reference', sub:'Integration documentation'},
+  status:   {title:'Status Automation', sub:'Auto-view and like WhatsApp statuses'},
 };
 
 function goto(page, el, fromBnav=false) {
@@ -1148,6 +1181,143 @@ setInterval(() => {
 }, 1000);
 document.getElementById('st-uptime').textContent = fmtUp(uptimeSec);
 document.getElementById('uptime-disp').textContent = fmtUp(uptimeSec);
+
+// ══════════════════════════════════════════════════════════════════
+// STATUS WATCHER
+// ══════════════════════════════════════════════════════════════════
+const SW_CONNECTED = INSTANCES.filter(i => i.instance?.state === 'open');
+
+function buildSWInstances() {
+  const wrap = document.getElementById('sw-instances-wrap');
+  if (!SW_CONNECTED.length) {
+    wrap.innerHTML = '<div class="empty"><div class="empty-ico">📱</div><p>No connected instances. Connect a number first.</p></div>';
+    document.getElementById('sw-global-badge').textContent = '0 enabled';
+    return;
+  }
+  wrap.innerHTML = SW_CONNECTED.map(i => {
+    const name = i.instance.instanceName;
+    return `<div class="panel" style="margin-bottom:12px" id="sw-card-${name}">
+      <div class="panel-hdr">
+        <div class="panel-title">📱 ${esc(name)}</div>
+        <label class="tog" title="Enable status automation">
+          <input type="checkbox" id="sw-tog-${name}" onchange="swToggle('${name}',this.checked)"/>
+          <span class="tog-sl"></span>
+        </label>
+      </div>
+      <div class="panel-body" id="sw-cfg-${name}" style="display:none">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:14px">
+          <div class="field">
+            <label>Min delay (minutes)</label>
+            <input type="number" id="sw-min-${name}" value="15" min="1" max="1440"/>
+            <div class="hint">Earliest a status is viewed after posting</div>
+          </div>
+          <div class="field">
+            <label>Max delay (minutes)</label>
+            <input type="number" id="sw-max-${name}" value="240" min="1" max="1440"/>
+            <div class="hint">Latest a status is viewed after posting</div>
+          </div>
+          <div class="field">
+            <label>Like probability (%)</label>
+            <input type="number" id="sw-like-${name}" value="30" min="0" max="100"/>
+            <div class="hint">Chance of ❤️ reacting to a viewed status</div>
+          </div>
+          <div class="field">
+            <label>Active hours</label>
+            <div style="display:flex;align-items:center;gap:8px">
+              <input type="number" id="sw-hstart-${name}" value="7" min="0" max="23" style="width:70px"/>
+              <span style="color:var(--text3);font-size:.8rem">to</span>
+              <input type="number" id="sw-hend-${name}" value="23" min="0" max="24" style="width:70px"/>
+            </div>
+            <div class="hint">24h format — statuses only viewed in this window</div>
+          </div>
+        </div>
+        <button class="btn btn-primary btn-sm" onclick="swSave('${name}')">💾 Save Config</button>
+      </div>
+    </div>`;
+  }).join('');
+
+  // Load each config
+  SW_CONNECTED.forEach(i => swLoadConfig(i.instance.instanceName));
+}
+
+async function swLoadConfig(name) {
+  const res = await api('GET', '/dashboard/status/' + name + '/config');
+  if (res.error) return;
+  const tog = document.getElementById('sw-tog-' + name);
+  const cfg = document.getElementById('sw-cfg-' + name);
+  if (!tog) return;
+  tog.checked = !!res.enabled;
+  if (res.enabled) cfg.style.display = 'block';
+  document.getElementById('sw-min-' + name).value = res.min_delay_minutes || 15;
+  document.getElementById('sw-max-' + name).value = res.max_delay_minutes || 240;
+  document.getElementById('sw-like-' + name).value = Math.round((res.like_probability || 0.3) * 100);
+  document.getElementById('sw-hstart-' + name).value = res.active_hours_start ?? 7;
+  document.getElementById('sw-hend-' + name).value = res.active_hours_end ?? 23;
+  updateSWBadge();
+}
+
+function swToggle(name, enabled) {
+  const cfg = document.getElementById('sw-cfg-' + name);
+  cfg.style.display = enabled ? 'block' : 'none';
+  if (enabled) swSave(name);
+  else swSave(name, false);
+}
+
+async function swSave(name, enabledOverride) {
+  const enabled = enabledOverride !== undefined
+    ? enabledOverride
+    : document.getElementById('sw-tog-' + name)?.checked;
+  const body = {
+    enabled:            !!enabled,
+    min_delay_minutes:  parseInt(document.getElementById('sw-min-' + name)?.value || 15),
+    max_delay_minutes:  parseInt(document.getElementById('sw-max-' + name)?.value || 240),
+    like_probability:   parseInt(document.getElementById('sw-like-' + name)?.value || 30) / 100,
+    active_hours_start: parseInt(document.getElementById('sw-hstart-' + name)?.value || 7),
+    active_hours_end:   parseInt(document.getElementById('sw-hend-' + name)?.value || 23),
+  };
+  const res = await api('POST', '/dashboard/status/' + name + '/config', body);
+  if (res.error) { toast(res.error, 'err'); return; }
+  toast(enabled ? name + ' status automation enabled' : name + ' disabled', enabled ? 'ok' : 'info');
+  updateSWBadge();
+}
+
+function updateSWBadge() {
+  const count = document.querySelectorAll('[id^="sw-tog-"]:checked').length;
+  document.getElementById('sw-global-badge').textContent = count + ' enabled';
+}
+
+async function loadSWLog() {
+  const res = await api('GET', '/dashboard/status/activity');
+  const wrap = document.getElementById('sw-log-wrap');
+  const log = res?.log || [];
+  if (!log.length) {
+    wrap.innerHTML = '<div class="empty"><div class="empty-ico">📋</div><p>No activity yet — automation starts polling every 10 minutes once enabled.</p></div>';
+    return;
+  }
+  wrap.innerHTML = '<table class="wh-table"><thead><tr><th>Time</th><th>Instance</th><th>Action</th><th>Detail</th></tr></thead><tbody>'
+    + log.slice(0, 50).map(e => `<tr>
+        <td style="font-family:var(--mono);font-size:.7rem;color:var(--text3)">${esc(e.ts)}</td>
+        <td><span class="badge b-blue">${esc(e.instance)}</span></td>
+        <td><span class="badge ${e.action==='viewed'?'b-green':e.action==='queued'?'b-amber':'b-gray'}">${esc(e.action)}</span></td>
+        <td style="color:var(--text2)">${esc(e.detail)}</td>
+      </tr>`).join('')
+    + '</tbody></table>';
+}
+
+// Init status page when navigated to
+const _origGoto = goto;
+// Wrap goto to trigger SW build on first visit
+let _swBuilt = false;
+function gotoWithSW(page, el, fromBnav=false) {
+  _origGoto(page, el, fromBnav);
+  if (page === 'status' && !_swBuilt) {
+    _swBuilt = true;
+    buildSWInstances();
+    loadSWLog();
+  }
+}
+// Override goto
+window.goto = gotoWithSW;
 </script>
 {% endraw %}
 </body>
