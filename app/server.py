@@ -24,6 +24,7 @@ from auth import (
 )
 from webhook_manager import webhook_manager, ALL_EVENTS
 from safety import send_message_safe, is_bot_message, is_self_message, WARMUP_MODE
+from status_watcher import get_config as sw_get_config, save_config as sw_save_config, get_activity_log as sw_get_log, start_watcher
 
 logger   = logging.getLogger(__name__)
 EVO_BASE = f"http://localhost:{os.environ.get('EVOLUTION_PORT', '8080')}"
@@ -35,6 +36,7 @@ app = FastAPI(title="WARP", docs_url=None, redoc_url=None)
 BASE_DIR  = os.path.dirname(__file__)
 templates = Jinja2Templates(directory=os.path.join(BASE_DIR, "templates"))
 register_handlers(app)
+start_watcher(app, _get_instances)
 
 
 # ── Internal Evolution API helper ─────────────────────────────────────────────
@@ -308,3 +310,21 @@ async def dash_send(request: Request, _: str = Depends(verify_session)):
         raise HTTPException(400, "instance, number and text required")
     return JSONResponse(await send_message_safe(instance=instance, jid=number,
                                                  message={"text": text}))
+
+
+# ── Status Automation endpoints ───────────────────────────────────────────────
+
+@app.get("/dashboard/status/{instance}/config")
+async def dash_status_get_cfg(instance: str, _: str = Depends(verify_session)):
+    return JSONResponse(sw_get_config(instance))
+
+
+@app.post("/dashboard/status/{instance}/config")
+async def dash_status_save_cfg(instance: str, request: Request, _: str = Depends(verify_session)):
+    body = await request.json()
+    return JSONResponse(sw_save_config(instance, body))
+
+
+@app.get("/dashboard/status/activity")
+async def dash_status_activity(_: str = Depends(verify_session)):
+    return JSONResponse({"log": sw_get_log()})
